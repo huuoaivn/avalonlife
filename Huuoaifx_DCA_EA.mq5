@@ -2718,16 +2718,28 @@ bool ADXFilterAllows()
 // IsHighImpactNewsWindow: Bo loc Tin tuc (Section 2.4e) - dung Economic Calendar noi bo
 // cua MT5 (khong can ket noi Internet rieng, du lieu do Terminal/Broker cung cap san).
 // Neu Broker/Terminal khong ho tro Calendar (CalendarValueHistory tra ve false) -> khong chan.
+// SUA LOI TREO TERMINAL (Fatal Bug #3): CalendarValueHistory()/CalendarEventById() la cac
+// lenh goi API Calendar cua Terminal - neu bi goi lien tuc MOI TICK (XAUUSD co the co hang
+// chuc tick/giay), Terminal co the bi "treo/lag" do qua tai truy van Calendar lap lai vo ich
+// trong khi du lieu Tin tuc thuc te chi thay doi rat cham (vai phut/lan). Them Cache 60 giay:
+// chi thuc su goi lai CalendarValueHistory() moi 60 giay 1 lan, cac tick con lai trong cung
+// cua so 60 giay do dung THANG ket qua lan truoc (lastNewsResult) - giam tai CPU/API dang ke
+// ma khong lam sai lech dieu kien (vung an toan quanh tin thuong tinh bang PHUT, khong phai giay).
 bool IsHighImpactNewsWindow()
   {
    if(!InpUseNewsFilter) return(false);
+
+   static datetime lastNewsCheck  = 0;
+   static bool     lastNewsResult = false;
+   if(TimeCurrent() - lastNewsCheck < 60) return(lastNewsResult);
+   lastNewsCheck = TimeCurrent();
 
    datetime now  = TimeCurrent();
    datetime from = now - (InpNewsMinutesAfter  + 2) * 60;
    datetime to   = now + (InpNewsMinutesBefore + 2) * 60;
 
    MqlCalendarValue values[];
-   if(!CalendarValueHistory(values, from, to, "US", NULL)) return(false);
+   if(!CalendarValueHistory(values, from, to, "US", NULL)) { lastNewsResult = false; return(false); }
 
    for(int i = 0; i < ArraySize(values); i++)
      {
@@ -2740,9 +2752,11 @@ bool IsHighImpactNewsWindow()
         {
          PrintFormat("[Huuoaifx DCA] Bo loc Tin tuc: dang trong vung an toan quanh tin '%s' (%s) -> Tam dung mo lenh.",
                      ev.name, TimeToString(values[i].time, TIME_DATE | TIME_MINUTES));
+         lastNewsResult = true;
          return(true);
         }
      }
+   lastNewsResult = false;
    return(false);
   }
 
@@ -4091,16 +4105,44 @@ void CloseAllOrdersInSequence(const SSequenceState &seq)
      }
   }
 
+// SUA LOI THIEU RETRY KHI DONG TOAN BO (Fatal Bug #5): TRUOC DAY ham nay chi goi
+// trade.PositionClose(ticket) DUY NHAT 1 LAN cho moi Position - neu gap loi tam thoi co
+// the tu phuc hoi (Requote/Gia thay doi/Timeout, rat de gap khi Vang XAUUSD dang giat manh
+// luc Dong toan bo EA - VD Money TP All/SL All/Total TP Hedge), lenh do se "sot lai" KHONG
+// duoc dong, trai voi dung y nghia "Dong TOAN BO" cua ham. Nay: ap dung CUNG CO CHE RETRY
+// toi da 3 lan (RefreshRates() roi thu dong lai) giong het CloseAllOrdersInSequence() o
+// tren, dam bao dong bo hanh vi retry giua 2 ham dong lenh chinh cua EA.
 void CloseAllEAOrders()
   {
+   int unclosedCount = 0;
    for(int i = PositionsTotal() - 1; i >= 0; i--)
      {
       ulong ticket = PositionGetTicket(i);
       if(ticket == 0) continue;
       if(PositionGetString(POSITION_SYMBOL) != _Symbol) continue;
       if(!IsManagedPosition((long)PositionGetInteger(POSITION_MAGIC), PositionGetString(POSITION_COMMENT))) continue;
-      trade.PositionClose(ticket);
+
+      bool closed = false;
+      for(int attempt = 1; attempt <= 3 && !closed; attempt++)
+        {
+         if(!PositionSelectByTicket(ticket)) { closed = true; break; } // Da khong con Position nay -> coi nhu xong
+         closed = trade.PositionClose(ticket);
+         if(!closed)
+           {
+            uint rc = trade.ResultRetcode();
+            bool retryable = (rc == TRADE_RETCODE_REQUOTE || rc == TRADE_RETCODE_PRICE_CHANGED ||
+                              rc == TRADE_RETCODE_PRICE_OFF || rc == TRADE_RETCODE_TIMEOUT);
+            PrintFormat("[Huuoaifx DCA] CloseAllEAOrders: Loi dong lenh #%I64u (lan %d/3): %d - %s%s",
+                        ticket, attempt, rc, trade.ResultRetcodeDescription(),
+                        (retryable && attempt < 3) ? " -> Refresh gia va thu lai." : "");
+            if(!retryable) break; // Loi khac (VD Position khong ton tai/da dong) -> retry vo ich
+            if(attempt < 3) symbolInfo.RefreshRates();
+           }
+        }
+      if(!closed) unclosedCount++;
      }
+   if(unclosedCount > 0)
+      PrintFormat("[Huuoaifx DCA] CANH BAO (CloseAllEAOrders): Con %d lenh CHUA dong duoc sau 3 lan thu - se duoc kiem tra/dong bo lai o lan cap nhat trang thai tiep theo.", unclosedCount);
   }
 
 //======================================================================
@@ -5946,10 +5988,20 @@ bool OpenNewOrder(const int direction, double lot, const bool isDCA = false)
    //     lon nhat) - dam bao luon lay dung Ticket that de gan Virtual SL/TP / PositionModify.
    if((InpUseVirtualTPSL && (vSL > 0.0 || vTP > 0.0)) || (!InpUseVirtualTPSL && (sendSL > 0.0 || sendTP > 0.0)))
      {
-      ulong newTicket  = 0;
-      ulong dealTicket = trade.ResultDeal();
-      if(dealTicket > 0 && HistoryDealSelect(dealTicket))
-         newTicket = (ulong)HistoryDealGetInteger(dealTicket, DEAL_POSITION_ID);
+      // --- Uu tien 1: trade.ResultPosition() - ham CTrade chuyen dung de lay dung Ticket
+      //     Position vua duoc tao boi lenh Market vua goi (co san tu MQL5 build moi, danh
+      //     tin cay nhat vi CTrade tu theo doi ket qua giao dich cua chinh no).
+      ulong newTicket = trade.ResultPosition();
+      // --- Uu tien 2: DEAL_POSITION_ID cua Deal vua khop (trade.ResultDeal()) - cach CHINH
+      //     THONG MQL5 khuyen dung de biet chac Deal do thuoc/tao ra Position nao.
+      if(newTicket == 0)
+        {
+         ulong dealTicket = trade.ResultDeal();
+         if(dealTicket > 0 && HistoryDealSelect(dealTicket))
+            newTicket = (ulong)HistoryDealGetInteger(dealTicket, DEAL_POSITION_ID);
+        }
+      // --- Uu tien 3: trade.ResultOrder() (dung voi lenh thi truong don gian, khong
+      //     Requote/Partial Fill).
       if(newTicket == 0)
          newTicket = trade.ResultOrder();
       if(newTicket == 0 || !PositionSelectByTicket(newTicket))
