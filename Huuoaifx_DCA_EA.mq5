@@ -1047,6 +1047,33 @@ bool IsManagedPosition(const long posMagic, const string posComment = "")
   }
 
 //----------------------------------------------------------------------
+// 5.4c TINH HOA HONG (COMMISSION) CUA 1 POSITION - SUA CANH BAO DEPRECATED:
+//      Thuoc tinh POSITION_COMMISSION (dung truc tiep qua PositionGetDouble()) da bi
+//      MetaQuotes danh dau "deprecated" tren cac build MT5 moi - Position khong con tin
+//      cay de luu Hoa hong o cap Position nua (dac biet voi lenh da tung bi Tia mot phan/
+//      Partial Close, moi Deal dong gop mot phan Hoa hong rieng). Thay vao do, ham nay
+//      dung dung cach MetaQuotes khuyen dung hien nay: HistorySelectByPosition(ticket) de
+//      nap toan bo lich su Deal (ca Deal Vao lan Deal Ra da tung xay ra, neu co) THUOC
+//      CHINH Position nay, roi CONG DON HistoryDealGetDouble(DEAL_COMMISSION) cua tung
+//      Deal - cho ket qua CHINH XAC HON ca thuoc tinh cu (vi cong du moi lan Hoa hong tung
+//      phat sinh tren Position, khong bi "mat" du lieu khi Position da qua Tia mot phan).
+double GetPositionCommission(const ulong ticket)
+  {
+   if(ticket == 0) return(0.0);
+   if(!HistorySelectByPosition(ticket)) return(0.0);
+
+   double commission = 0.0;
+   int    dealsTotal  = HistoryDealsTotal();
+   for(int i = 0; i < dealsTotal; i++)
+     {
+      ulong dealTicket = HistoryDealGetTicket(i);
+      if(dealTicket == 0) continue;
+      commission += HistoryDealGetDouble(dealTicket, DEAL_COMMISSION);
+     }
+   return(commission);
+  }
+
+//----------------------------------------------------------------------
 // 5.5 Parse chuoi Custom Lot Sequence dang "0.01-0.02-0.03..."
 //----------------------------------------------------------------------
 bool ParseCustomLotSequence(const string seq, double &outArr[], int &outCount)
@@ -3395,9 +3422,10 @@ bool FindWorstTicketAnyMagic(const int direction, const int protectFirstN, ulong
       ArrayResize(tickets, n + 1); ArrayResize(times, n + 1); ArrayResize(profits, n + 1); ArrayResize(lots, n + 1);
       tickets[n] = ticket;
       times[n]   = (datetime)PositionGetInteger(POSITION_TIME);
-      // UPGRADE (sua loi mat tien Hoa hong): POSITION_PROFIT khong bao gom phi san -
-      // cong them POSITION_COMMISSION de Loi/Lo tinh dung 100% chi phi thuc te.
-      profits[n] = PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP) + PositionGetDouble(POSITION_COMMISSION);
+      // SUA CANH BAO DEPRECATED (POSITION_COMMISSION): dung GetPositionCommission(ticket)
+      // (Section 5.4c) thay vi doc truc tiep tu Position - van dam bao Loi/Lo tinh dung
+      // 100% chi phi thuc te (POSITION_PROFIT khong bao gom phi san).
+      profits[n] = PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP) + GetPositionCommission(ticket);
       lots[n]    = PositionGetDouble(POSITION_VOLUME);
      }
 
@@ -3449,8 +3477,8 @@ bool FindNewestTicketAnyMagic(const int direction, ulong &outTicket, double &out
       if(!found || t >= newestTime)
         {
          newestTime = t; newestTicket = ticket;
-         // UPGRADE (sua loi mat tien Hoa hong): cong them POSITION_COMMISSION.
-         newestProfit = PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP) + PositionGetDouble(POSITION_COMMISSION);
+         // SUA CANH BAO DEPRECATED (POSITION_COMMISSION): dung GetPositionCommission(ticket).
+         newestProfit = PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP) + GetPositionCommission(ticket);
          found = true;
         }
      }
@@ -3940,11 +3968,12 @@ void SyncSequenceFromPositions()
       double   lot       = PositionGetDouble(POSITION_VOLUME);
       double   openPr    = PositionGetDouble(POSITION_PRICE_OPEN);
       datetime openTm    = (datetime)PositionGetInteger(POSITION_TIME);
-      // UPGRADE (sua loi mat tien Hoa hong): POSITION_PROFIT khong bao gom phi san (Commission)
-      // - cong them POSITION_COMMISSION de Loi nhuan cua chuoi (sequenceProfit) va tung lenh
-      // (SGridOrder.profit) phan anh DUNG 100% ket qua thuc te (anh huong day chuyen den moi
-      // noi dung sequenceProfit: EvaluateChainTP/StepProfit/Trailing/AccountTargets/Trend Switch...).
-      double   profit    = PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP) + PositionGetDouble(POSITION_COMMISSION);
+      // SUA CANH BAO DEPRECATED (POSITION_COMMISSION): POSITION_PROFIT khong bao gom phi
+      // san (Commission) - dung GetPositionCommission(ticket) (Section 5.4c, cong don tu
+      // lich su Deal) de Loi nhuan cua chuoi (sequenceProfit) va tung lenh (SGridOrder.profit)
+      // phan anh DUNG 100% ket qua thuc te (anh huong day chuyen den moi noi dung
+      // sequenceProfit: EvaluateChainTP/StepProfit/Trailing/AccountTargets/Trend Switch...).
+      double   profit    = PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP) + GetPositionCommission(ticket);
       string   cmt       = PositionGetString(POSITION_COMMENT);
 
       // Luu y: kiem tra HEDGEZONE_TAG TRUOC HEDGE_TAG vi " #HEDGEZONE" CHUA " #HEDGE"
@@ -4671,8 +4700,8 @@ double GetHedgeProfit()
   {
    if(!g_hedge.active) return(0.0);
    if(!PositionSelectByTicket(g_hedge.ticket)) return(0.0);
-   // UPGRADE (sua loi mat tien Hoa hong): cong them POSITION_COMMISSION.
-   return(PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP) + PositionGetDouble(POSITION_COMMISSION));
+   // SUA CANH BAO DEPRECATED (POSITION_COMMISSION): dung GetPositionCommission(ticket).
+   return(PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP) + GetPositionCommission(g_hedge.ticket));
   }
 
 // --- BAO VE KHI CHOT CHUNG VOI HEDGE NGUOC CHIEU (Section 2.11, InpHedgeCloseMinProfit) -
@@ -4813,8 +4842,8 @@ double GetHedgeZoneProfit()
   {
    if(!g_hedgeZone.active) return(0.0);
    if(!PositionSelectByTicket(g_hedgeZone.ticket)) return(0.0);
-   // UPGRADE (sua loi mat tien Hoa hong): cong them POSITION_COMMISSION.
-   return(PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP) + PositionGetDouble(POSITION_COMMISSION));
+   // SUA CANH BAO DEPRECATED (POSITION_COMMISSION): dung GetPositionCommission(ticket).
+   return(PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP) + GetPositionCommission(g_hedgeZone.ticket));
   }
 
 void ManageHedgingZone()
@@ -4927,11 +4956,12 @@ void ManageOppositeOrder(const int direction)
 // hoan toan BO SOT phan Loi/Lo cua 2 lenh nay, gay sai lech so voi thuc te tren tai khoan.
 double GetOppositeProfit()
   {
+   // SUA CANH BAO DEPRECATED (POSITION_COMMISSION): dung GetPositionCommission(ticket).
    double total = 0.0;
    if(g_oppBuy.active && PositionSelectByTicket(g_oppBuy.ticket))
-      total += PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP) + PositionGetDouble(POSITION_COMMISSION);
+      total += PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP) + GetPositionCommission(g_oppBuy.ticket);
    if(g_oppSell.active && PositionSelectByTicket(g_oppSell.ticket))
-      total += PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP) + PositionGetDouble(POSITION_COMMISSION);
+      total += PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP) + GetPositionCommission(g_oppSell.ticket);
    return(total);
   }
 
