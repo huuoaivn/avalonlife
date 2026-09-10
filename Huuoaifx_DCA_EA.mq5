@@ -5988,20 +5988,16 @@ bool OpenNewOrder(const int direction, double lot, const bool isDCA = false)
    //     lon nhat) - dam bao luon lay dung Ticket that de gan Virtual SL/TP / PositionModify.
    if((InpUseVirtualTPSL && (vSL > 0.0 || vTP > 0.0)) || (!InpUseVirtualTPSL && (sendSL > 0.0 || sendTP > 0.0)))
      {
-      // --- Uu tien 1: trade.ResultPosition() - ham CTrade chuyen dung de lay dung Ticket
-      //     Position vua duoc tao boi lenh Market vua goi (co san tu MQL5 build moi, danh
-      //     tin cay nhat vi CTrade tu theo doi ket qua giao dich cua chinh no).
-      ulong newTicket = trade.ResultPosition();
-      // --- Uu tien 2: DEAL_POSITION_ID cua Deal vua khop (trade.ResultDeal()) - cach CHINH
-      //     THONG MQL5 khuyen dung de biet chac Deal do thuoc/tao ra Position nao.
-      if(newTicket == 0)
-        {
-         ulong dealTicket = trade.ResultDeal();
-         if(dealTicket > 0 && HistoryDealSelect(dealTicket))
-            newTicket = (ulong)HistoryDealGetInteger(dealTicket, DEAL_POSITION_ID);
-        }
-      // --- Uu tien 3: trade.ResultOrder() (dung voi lenh thi truong don gian, khong
+      // --- SUA LOI COMPILE (trade.ResultPosition() KHONG TON TAI trong class CTrade chuan
+      //     cua MQL5 - "undeclared identifier", da goi nham o ban truoc). Dung dung 2 ham
+      //     CO THAT cua CTrade: (1) DEAL_POSITION_ID cua Deal vua khop (trade.ResultDeal())
+      //     - cach CHINH THONG MQL5 khuyen dung de biet chac Deal do thuoc/tao ra Position
+      //     nao; (2) Fallback trade.ResultOrder() (dung voi lenh thi truong don gian, khong
       //     Requote/Partial Fill).
+      ulong newTicket  = 0;
+      ulong dealTicket = trade.ResultDeal();
+      if(dealTicket > 0 && HistoryDealSelect(dealTicket))
+         newTicket = (ulong)HistoryDealGetInteger(dealTicket, DEAL_POSITION_ID);
       if(newTicket == 0)
          newTicket = trade.ResultOrder();
       if(newTicket == 0 || !PositionSelectByTicket(newTicket))
