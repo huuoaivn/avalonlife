@@ -169,7 +169,7 @@ input double   InpMaxTotalLot         = 2.3;   // Lots toi da (0 = Khong gioi ha
 input bool     InpNewCycleAtMaxLot    = false; // Bat New Cycle khi dat Lots toi da
 input int      InpOpenOrderDelaySec   = 2;     // Thoi gian delay moi lan mo lenh, giay
 input bool     InpUseMarginProtection = true;  // Bat bo loc Margin Level an toan?
-input double   InpMinMarginLevel      = 200.0; // Margin Level toi thieu (%) de cho phep nhoi them DCA
+input double   InpMinMarginLevel      = 250.0; // Margin Level toi thieu (%) de cho phep nhoi them DCA (Toi uu Cent M1: nang bao ve ky quy len 250%)
 
 //--- 2.3 CHE DO XO SO (LOTTERY / HIGH-RISK MODE) -----------------------
 input group "===== CHE DO XO SO ====="
@@ -210,8 +210,8 @@ input double                InpFixedStepPips        = 30.0; // 0.Khoang cach nho
 input double                InpDCAOrderTP_Pips      = 0.0;  // TP don lenh (0->TP chuoi)
 input double                InpChainTP_Pips         = 50.0; // TP chuoi DCA, pips
 input bool                  InpUseDynamicChainTP    = true;  // Tu dong giam TP chuoi khi so lenh tang cao?
-input int                   InpDynamicTPStartOrder  = 7;     // So lenh bat dau giam TP chuoi
-input double                InpDynamicTPReducedPips = 5.0;   // TP chuoi khi da vuot moc (pips, keo ve sat hoa von)
+input int                   InpDynamicTPStartOrder  = 10;    // So lenh bat dau giam TP chuoi (Toi uu Cent M1: tu lenh thu 10 moi bat dau co TP)
+input double                InpDynamicTPReducedPips = 8.0;   // TP chuoi khi da vuot moc (pips, keo ve sat hoa von) (Toi uu Cent M1: co TP ve 8 pips)
 input bool                  InpUseDynamicGridStep   = true;  // Su dung Khoang cach Grid da tang theo moc so lenh
 input int                   InpGridStepTier1Count   = 5;    // 1.So lenh tang khoang cach nhoi
 input double                InpGridStepTier1Pips    = 30.0; // 1.Khoang cach nhoi lenh
@@ -354,7 +354,7 @@ input int      InpHedgeActivateCount     = 5;     // So lenh kich hoat hedging (
 input double   InpHedgePercent           = -25.0; // Phan tram kich hoat hedging (0->OFF)
 input bool     InpHedgeUseDCALotForHedge = false; // Su dung lots DCA mo lots hedging (false->Phan tram lots hedging)
 input double   InpHedgeLotMultiplier     = 20.0;  // Phan tram lots hedging
-input double   InpHedgeTP_Money          = 10.0;  // TP hedging, pips
+input double   InpHedgeTP_Money          = 0.0;   // TP hedging, pips (Toi uu Cent M1: TAT chot loi Hedge theo Pips - tranh lap vong Scalping Hedge, bat buoc gong cung chuoi)
 input double   InpHedgeTotalTPMoney      = 50.0;  // So tien TP tong khi hedging, $
 input bool     InpHedgeStopTrimWhileActive = true; // Dung tia lenh khi hedging?
 input double   InpHedgeZoneTriggerPercent= 5.0;   // (Nang cao) Nguong % Drawdown/Balance bo sung de kich hoat Hedge
@@ -472,7 +472,7 @@ input double                InpTrendSwitchGraceMinMinutes  = 10.0;  // Gia han T
 input double                InpTrendSwitchGraceSeverityCap = 2.0;   // Lo dat bao nhieu LAN nguong goc (VD 2.0 = gap doi nguong) thi Gia han giam toi muc THAP NHAT o tren - giua nguong goc (x1) va muc nay noi suy tuyen tinh
 
 input bool                  InpUseTrendSwitchStallExit    = true;   // Them dieu kien THOAT Trend Switch khi chuoi dang DUOI XU HUONG (chasing) HET DA - khong tao them LOI NHUAN DINH MOI trong 1 thoi gian dai - doc lap hoan toan voi ADX va tin hieu dao chieu (bat ke chi bao tin hieu co phan ung kip hay khong)
-input double                InpTrendSwitchStallMinutes    = 90.0;   // So PHUT KHONG co Loi nhuan dinh MOI (chuoi dang duoi xu huong) truoc khi coi la "thi truong het da/di ngang" va cho THOAT Trend Switch (chi tinh tu khi chuoi da tung co lai, tranh chot non lenh vua mo)
+input double                InpTrendSwitchStallMinutes    = 20.0;   // So PHUT KHONG co Loi nhuan dinh MOI (chuoi dang duoi xu huong) truoc khi coi la "thi truong het da/di ngang" va cho THOAT Trend Switch (chi tinh tu khi chuoi da tung co lai, tranh chot non lenh vua mo) (Toi uu Cent M1: di ngang 20 phut la tu thoat Trend Switch)
 
 input bool                  InpTSPyramidFixedLot          = true;   // Chuoi DANG DUOI XU HUONG (Trend Switch chasing) dung LOT CO DINH (= Lot cua lenh dau tien) cho MOI lan nhoi them, KHONG nhan He so tang dan nhu DCA thuong - tranh tinh trang lenh nhoi sau cung (thuong to nhat) lai nam o diem gia XA NHAT, de "mac ket" neu dao chieu dot ngot (Khong anh huong DCA thuong / Positive Pyramiding doc lap)
 input int                   InpTSPyramidMaxLegs           = 6;      // So lenh TOI DA cho MOI DOT nhoi cua chuoi DANG DUOI XU HUONG (0 = khong gioi han) - day DOT thi TAM DUNG (xem InpTSPyramidAllowNextBatch de mo DOT tiep theo) (Khong anh huong DCA thuong / Positive Pyramiding doc lap)
@@ -574,7 +574,7 @@ input double   InpEngulfing_MinBodyRatio  = 1.1;  // (Nang cao) Ty le Than toi t
 
 //--- 2.20 CAC NHOM MO RONG (GIU LAI TU BAN CU - KHONG CO TRONG DANH SACH MOI) --------
 input group "===== PYRAMIDING SETTINGS ====="
-input double   InpPyramidingStepPips      = 150;  // Pyramiding Step (Pips)
+input double   InpPyramidingStepPips      = 40.0; // Pyramiding Step (Pips) (Toi uu Cent M1: rut ngan khoang cach nhoi thuan song)
 input bool     InpPyramidingRequireSignal = true;  // Yeu cau xac nhan tin hieu khi Pyramiding
 
 input group "===== SMART SIGNAL ENGINE SETTINGS ====="
@@ -4122,15 +4122,35 @@ void CloseAllOrdersInSequence(const SSequenceState &seq)
    // SL, Step Profit, Trend Switch...), lenh Hedge NGUOC CHIEU voi chuoi do (neu co) cung
    // da toi luc "chot so" cung - vi no thuong bien dong NGHICH voi chinh chuoi vua dong,
    // dong LUON de tranh de no o lai mot minh (thuong Lot lon, de mac o vung gia cuc tri).
+   // SUA LOI THIEU RETRY KHI DONG LENH HEDGE (Chong ket lenh Hedge): TRUOC DAY doan nay
+   // chi goi trade.PositionClose(g_hedge.ticket) DUY NHAT 1 LAN - neu gap loi tam thoi co
+   // the tu phuc hoi (Requote/Gia thay doi/Timeout, de gap luc XAUUSD giat manh dung luc
+   // chuoi vua dong), lenh Hedge (thuong Lot lon) se "sot lai" mot minh ngoai thi truong,
+   // dung dieu EA dang co gang tranh. Nay ap dung CUNG CO CHE RETRY toi da 3 lan
+   // (RefreshRates() roi thu dong lai) giong het vong lap dong tung lenh trong chuoi o tren.
    if(g_hedge.active && chainDir != 0 && g_hedge.direction == -chainDir)
      {
       double hedgeProfit = GetHedgeProfit();
-      if(trade.PositionClose(g_hedge.ticket))
-         PrintFormat("[Huuoaifx DCA] Hedge (nguoc chieu voi chuoi vua dong): da dong lenh Hedge #%I64u, Profit=%.2f.",
-                     g_hedge.ticket, hedgeProfit);
-      else
-         PrintFormat("[Huuoaifx DCA] Loi dong lenh Hedge #%I64u: %d - %s",
-                     g_hedge.ticket, trade.ResultRetcode(), trade.ResultRetcodeDescription());
+      bool   h_closed    = false;
+      for(int attempt = 1; attempt <= 3 && !h_closed; attempt++)
+        {
+         if(!PositionSelectByTicket(g_hedge.ticket)) { h_closed = true; break; } // Da khong con Position nay -> coi nhu xong
+         h_closed = trade.PositionClose(g_hedge.ticket);
+         if(!h_closed)
+           {
+            uint rc = trade.ResultRetcode();
+            bool retryable = (rc == TRADE_RETCODE_REQUOTE || rc == TRADE_RETCODE_PRICE_CHANGED ||
+                              rc == TRADE_RETCODE_PRICE_OFF || rc == TRADE_RETCODE_TIMEOUT);
+            PrintFormat("[Huuoaifx DCA] Loi dong lenh Hedge #%I64u (lan %d/3): %d - %s%s",
+                        g_hedge.ticket, attempt, rc, trade.ResultRetcodeDescription(),
+                        (retryable && attempt < 3) ? " -> Refresh gia va thu lai." : "");
+            if(!retryable) break; // Loi khac (VD Position khong ton tai/da dong) -> retry vo ich
+            if(attempt < 3) symbolInfo.RefreshRates();
+           }
+         else
+            PrintFormat("[Huuoaifx DCA] Hedge (nguoc chieu voi chuoi vua dong): da dong lenh Hedge #%I64u, Profit=%.2f.",
+                        g_hedge.ticket, hedgeProfit);
+        }
      }
   }
 
