@@ -3427,7 +3427,7 @@ bool FindWorstTicketAnyMagic(const int direction, const int protectFirstN, ulong
      {
       ulong ticket = PositionGetTicket(i);
       if(ticket == 0) continue;
-      if(PositionGetString(POSITION_SYMBOL) != _Symbol) continue;
+      if(StringCompare(PositionGetString(POSITION_SYMBOL), _Symbol, false) != 0) continue;
       int posDir = (PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_BUY) ? 1 : -1;
       if(posDir != direction) continue;
       string cmt = PositionGetString(POSITION_COMMENT);
@@ -3482,7 +3482,7 @@ bool FindNewestTicketAnyMagic(const int direction, ulong &outTicket, double &out
      {
       ulong ticket = PositionGetTicket(i);
       if(ticket == 0) continue;
-      if(PositionGetString(POSITION_SYMBOL) != _Symbol) continue;
+      if(StringCompare(PositionGetString(POSITION_SYMBOL), _Symbol, false) != 0) continue;
       int posDir = (PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_BUY) ? 1 : -1;
       if(posDir != direction) continue;
       string cmt = PositionGetString(POSITION_COMMENT);
@@ -3975,7 +3975,7 @@ void SyncSequenceFromPositions()
      {
       ulong ticket = PositionGetTicket(i); // Da tu dong "chon" Position nay cho cac PositionGetXXX() ben duoi
       if(ticket == 0) continue;
-      if(PositionGetString(POSITION_SYMBOL) != _Symbol) continue;
+      if(StringCompare(PositionGetString(POSITION_SYMBOL), _Symbol, false) != 0) continue;
       if(!IsManagedPosition((long)PositionGetInteger(POSITION_MAGIC), PositionGetString(POSITION_COMMENT))) continue;
 
       liveTickets[liveCount] = ticket; liveCount++;
@@ -4209,7 +4209,7 @@ void CloseAllEAOrders()
      {
       ulong ticket = PositionGetTicket(i);
       if(ticket == 0) continue;
-      if(PositionGetString(POSITION_SYMBOL) != _Symbol) continue;
+      if(StringCompare(PositionGetString(POSITION_SYMBOL), _Symbol, false) != 0) continue;
       if(!IsManagedPosition((long)PositionGetInteger(POSITION_MAGIC), PositionGetString(POSITION_COMMENT))) continue;
 
       bool closed = false;
@@ -4256,7 +4256,7 @@ void ManageVirtualTPSL()
      {
       ulong ticket = PositionGetTicket(i);
       if(ticket == 0) continue;
-      if(PositionGetString(POSITION_SYMBOL) != _Symbol) continue;
+      if(StringCompare(PositionGetString(POSITION_SYMBOL), _Symbol, false) != 0) continue;
       if(!IsManagedPosition((long)PositionGetInteger(POSITION_MAGIC), PositionGetString(POSITION_COMMENT))) continue;
 
       double sl = 0.0, tp = 0.0;
@@ -6326,7 +6326,7 @@ bool OpenNewOrder(const int direction, double lot, const bool isDCA = false)
            {
             ulong vt = PositionGetTicket(vi);
             if(vt == 0) continue;
-            if(PositionGetString(POSITION_SYMBOL) != _Symbol) continue;
+            if(StringCompare(PositionGetString(POSITION_SYMBOL), _Symbol, false) != 0) continue;
             if((long)PositionGetInteger(POSITION_MAGIC) != InpMagicNumber) continue;
             datetime vpt = (datetime)PositionGetInteger(POSITION_TIME);
             if(vpt >= newestTime) { newestTime = vpt; newestTicket = vt; }
