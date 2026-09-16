@@ -4736,6 +4736,15 @@ void CheckHedgeZoneTrigger()
 
    int neediestOrders = (int)MathMax(g_buySeq.totalOrders, g_sellSeq.totalOrders);
 
+   // Xac dinh TRUOC huong Hedge se mo (hedgeDir) va Tong Lot chuoi dang can ho tro (baseLot)
+   // - can biet hedgeDir SOM HON truoc day (thay vi tinh sau khi da quyet dinh allowOpen) de
+   // dung cho dieu kien Khoang cach Gia ben duoi (chi anh huong nhanh mo tang Hedge tiep theo
+   // H_{n+1}, KHONG lam thay doi dieu kien mo H1 - van giu nguyen y nghia cu).
+   int    hedgeDir;
+   double baseLot;
+   if(g_buySeq.sequenceProfit <= g_sellSeq.sequenceProfit) { hedgeDir = -1; baseLot = g_buySeq.totalLot; }
+   else                                                     { hedgeDir = 1;  baseLot = g_sellSeq.totalLot; }
+
    bool allowOpen = false;
    if(g_hedge.totalOrders <= 0)
      {
@@ -4755,17 +4764,27 @@ void CheckHedgeZoneTrigger()
       // am), moc "tang tiep theo" se DUNG YEN mai o cung 1 gia tri, khien dieu kien luon
       // dung o MOI TICK va EA mo Hedge LIEN TUC KHONG GIOI HAN (spam lenh, cuc ky nguy hiem
       // tren tai khoan that) - buoc nhay toi thieu 1 dam bao moc luon tang dan qua tung tang.
-      int step = MathMax(InpHedgeNextOrderStep, 1);
-      int nextTierOrders = InpHedgeActivateCount + g_hedge.totalOrders * step;
-      allowOpen = (neediestOrders >= nextTierOrders);
+      int  step = MathMax(InpHedgeNextOrderStep, 1);
+      int  nextTierOrders = InpHedgeActivateCount + g_hedge.totalOrders * step;
+      bool ordersOk = (neediestOrders >= nextTierOrders);
+
+      // SUA LOI "NHOI THEM HEDGE KHI BAO DA TAN" (thuc chien phat hien): TRUOC DAY chi can
+      // DU So lenh la mo them tang Hedge ngay, KE CA khi Gia dang HOI VE (thuan loi cho chuoi
+      // chinh, bat loi cho huong Hedge) - dan den nhoi them tang Hedge khong can thiet dung
+      // luc thi truong da bat dau dao chieu co loi cho chuoi chinh. Nay BAT BUOC THEM dieu
+      // kien Khoang cach Gia: Gia hien tai phai DA DI TIEP TUC BAT LOI cho chuoi chinh it
+      // nhat 20 pips TINH TU Gia mo cua tang Hedge GAN NHAT (g_hedge.openPrice) - dam bao
+      // "bao gia" van dang thuc su tiep dien, khong chi don thuan dem du so lenh DCA da nhoi.
+      bool priceContinuesAdverse;
+      if(hedgeDir == 1)
+         priceContinuesAdverse = (SymbolInfoDouble(_Symbol, SYMBOL_ASK) >= g_hedge.openPrice + 20.0 * g_sym.pipSize);
+      else
+         priceContinuesAdverse = (SymbolInfoDouble(_Symbol, SYMBOL_BID) <= g_hedge.openPrice - 20.0 * g_sym.pipSize);
+
+      allowOpen = (ordersOk && priceContinuesAdverse);
      }
 
    if(!allowOpen) return;
-
-   int    hedgeDir;
-   double baseLot;
-   if(g_buySeq.sequenceProfit <= g_sellSeq.sequenceProfit) { hedgeDir = -1; baseLot = g_buySeq.totalLot; }
-   else                                                     { hedgeDir = 1;  baseLot = g_sellSeq.totalLot; }
 
    if(baseLot <= 0.0) return;
 
@@ -4980,22 +4999,29 @@ void ProcessHedgePairOffset()
    if(!InpUseHedgeOffset) return;
    if(!g_hedge.active) return;
 
-   // Xac dinh tang Hedge MOI NHAT H_n (openTime lon nhat trong g_hedge.orders[])
-   int      hnIdx  = -1;
-   datetime hnTime = 0;
+   // SUA LOI LOGIC (thuc chien phat hien): TRUOC DAY ham nay chon tang Hedge theo openTime
+   // LON NHAT (tang MOI MO GAN DAY NHAT) de can tru - dan den tinh huong sai: lay dung tang
+   // Hedge vua mo o day song (chi am vai cent) de "can tru" voi lenh chuoi chinh dang lai to,
+   // trong khi tang Hedge KET SAU TREN DINH (mo som hon, am NANG NHAT - hang tram $) lai bi
+   // BO QUEN vi khong phai la tang moi nhat. Nay: doi tieu chi chon sang dung tang Hedge dang
+   // AM NANG NHAT (profit < 0.0 VA profit NHO NHAT trong toan mang g_hedge.orders[]) - dung
+   // muc dich that su cua Offset la "giai cuu" dung lenh Hedge dang ket nang nhat truoc tien.
+   int    hnIdx    = -1;
+   double hnWorst  = 0.0;
    for(int hi = 0; hi < ArraySize(g_hedge.orders); hi++)
-      if(hnIdx == -1 || g_hedge.orders[hi].openTime >= hnTime)
+     {
+      double hProfitScan = g_hedge.orders[hi].profit;
+      if(hProfitScan < 0.0 && (hnIdx == -1 || hProfitScan < hnWorst))
         {
-         hnTime = g_hedge.orders[hi].openTime;
-         hnIdx  = hi;
+         hnWorst = hProfitScan;
+         hnIdx   = hi;
         }
-   if(hnIdx < 0) return;
+     }
+   if(hnIdx < 0) return; // Khong co tang Hedge nao dang AM -> khong co gi de can tru
 
    ulong  hnTicket = g_hedge.orders[hnIdx].ticket;
    double hnProfit = g_hedge.orders[hnIdx].profit;
    int    hnDir    = g_hedge.orders[hnIdx].direction;
-
-   if(hnProfit >= 0.0) return; // Chi xu ly khi H_n dang THUC SU AM (thi truong hoi nguoc lai)
 
    // Chuoi chinh doi ung ma H_n dang bao ve = chuoi co huong NGUOC voi H_n (dung quy uoc da
    // xac nhan tai OpenHedgeOrder/CheckHedgeZoneTrigger: Hedge luon mo CUNG chieu voi ben
@@ -5028,7 +5054,7 @@ void ProcessHedgePairOffset()
       return;
      }
 
-   PrintFormat("[Huuoaifx DCA] Can tru Offset thanh cong: Dong Hn #%I64u (lo %.2f) + %d lenh M_cuoi cua chuoi %s (lai %.2f) -> Tong lai = %.2f.",
+   PrintFormat("[Huuoaifx DCA] Can tru Offset thanh cong: Dong Hedge am nang nhat #%I64u (lo %.2f) + %d lenh chuoi chinh %s (lai %.2f) -> Tong lai = %.2f.",
                hnTicket, hnProfit, mCount, (neediestDir == 1 ? "BUY" : "SELL"), mTotalProfit, sumProfit);
    SyncSequenceFromPositions();
   }
@@ -5305,12 +5331,17 @@ void EvaluateAccountTargets()
         }
      }
 
-   // MIEN TRU Money TP Toan tai khoan khi Trend Switch dang kich hoat (g_trendSwitchState != 0):
-   // luc nay 1 chuoi dang bi dong bang (thuong dang lo) va 1 chuoi dang "duoi xu huong" (dang
-   // xay lai) - neu khong mien tru, Tong P/L 2 chuoi cong lai co the vo tinh cham InpAccountTP_Value
-   // va Dong toan bo CA chuoi dang duoi xu huong lan chuoi dang bi dong bang, cat ngang dung y
-   // "giu nguyen lai cho den khi Trend Switch tu quyet dinh" cua tinh nang.
-   if(InpUseAccountTP && g_trendSwitchState == 0)
+   // SUA LOI "KET LOI" (thuc chien phat hien - GIAI PHONG ACCOUNT TP): TRUOC DAY dong nay
+   // MIEN TRU Money TP Toan tai khoan khi Trend Switch dang kich hoat (g_trendSwitchState !=
+   // 0), voi ly do "giu nguyen lai cho Trend Switch tu quyet dinh". Tuy nhien thuc te Account
+   // TP la LUOI CHOT LOI TOI THUONG cua toan he thong - mot khi TONG TAI KHOAN (ca 2 chuoi +
+   // Hedge + HedgeZone + Opposite) da du tien theo dung InpAccountTP_Value, BAT BUOC phai
+   // duoc chot NGAY, bat ke Trend Switch dang o trang thai nao - khong duoc de 1 co che con
+   // (Trend Switch) chan mat co hoi chot loi toan cuc da chin muoi. Nay: BO HAN dieu kien
+   // g_trendSwitchState == 0 khoi rieng nhanh Account TP nay (dong InpCloseAllPercentDiff
+   // ngay phia tren VAN GIU NGUYEN mien tru Trend Switch, vi do la truong hop khac - chi phat
+   // hien "1 ben chay xa" khong phai Loi bao ve toi thuong).
+   if(InpUseAccountTP)
      {
       double target = InpAccountTP_IsPercent ? (bal * InpAccountTP_Value / 100.0) : InpAccountTP_Value;
       if(totalProfit >= target)
